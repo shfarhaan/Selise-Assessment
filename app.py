@@ -8,11 +8,10 @@ from pathlib import Path
 from datetime import datetime
 
 from src.config import (
-    AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, VECTOR_STORE_PATH, DOCUMENTS_PATH,
+    GEMINI_API_KEY, VECTOR_STORE_PATH, DOCUMENTS_PATH,
     CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_DOCUMENTS, TEMPERATURE,
-    STREAMLIT_PAGE_TITLE, STREAMLIT_PAGE_ICON, 
-    CHAT_DEPLOYMENT_NAME, EMBEDDING_DEPLOYMENT_NAME,
-    CHAT_API_VERSION, EMBEDDING_API_VERSION
+    STREAMLIT_PAGE_TITLE, STREAMLIT_PAGE_ICON,
+    CHAT_MODEL_NAME, EMBEDDING_MODEL_NAME
 )
 from src.document_processor import DocumentProcessor
 from src.embeddings import EmbeddingManager, FAISSVectorStore
@@ -24,22 +23,20 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def resolve_azure_credentials() -> tuple[str, str]:
-    """Resolve Azure credentials from env first, then Streamlit secrets."""
-    api_key = AZURE_OPENAI_API_KEY or ""
-    endpoint = AZURE_OPENAI_ENDPOINT or ""
+def resolve_gemini_api_key() -> str:
+    """Resolve Gemini API key from env first, then Streamlit secrets."""
+    api_key = GEMINI_API_KEY or ""
 
-    if api_key and endpoint:
-        return api_key, endpoint
+    if api_key:
+        return api_key
 
     try:
-        api_key = api_key or st.secrets.get("AZURE_OPENAI_API_KEY", "")
-        endpoint = endpoint or st.secrets.get("AZURE_OPENAI_ENDPOINT", "")
+        api_key = api_key or st.secrets.get("GEMINI_API_KEY", "")
     except Exception:
         # st.secrets can raise when no secrets file is configured.
         pass
 
-    return api_key, endpoint
+    return api_key
 
 # Page configuration
 st.set_page_config(
@@ -67,9 +64,9 @@ def initialize_rag_system():
     """Initialize RAG components (cached)"""
     try:
         # Check API key
-        api_key, endpoint = resolve_azure_credentials()
-        if not api_key or not endpoint:
-            st.error("❌ Azure OpenAI credentials not found. Please set AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT.")
+        api_key = resolve_gemini_api_key()
+        if not api_key:
+            st.error("❌ Gemini API key not found. Please set GEMINI_API_KEY.")
             st.stop()
         
         # Initialize components
@@ -77,9 +74,7 @@ def initialize_rag_system():
             # Embedding manager
             embedding_manager = EmbeddingManager(
                 api_key=api_key,
-                endpoint=endpoint,
-                deployment_name=EMBEDDING_DEPLOYMENT_NAME,
-                api_version=EMBEDDING_API_VERSION
+                model_name=EMBEDDING_MODEL_NAME
             )
             
             # Vector store
@@ -100,10 +95,8 @@ def initialize_rag_system():
             # Agent
             agent = AgenticRAG(
                 api_key=api_key,
-                endpoint=endpoint,
                 retriever=retriever,
-                deployment_name=CHAT_DEPLOYMENT_NAME,
-                api_version=CHAT_API_VERSION,
+                model_name=CHAT_MODEL_NAME,
                 temperature=TEMPERATURE
             )
             
@@ -146,13 +139,46 @@ def process_documents_tab():
             with open(file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             st.success(f"✅ Saved {uploaded_file.name}")
+
+    test_col1, test_col2 = st.columns([0.55, 0.45])
+    with test_col1:
+        if st.button("🧪 Test Gemini Connection", use_container_width=True):
+            try:
+                api_key = resolve_gemini_api_key()
+                if not api_key:
+                    st.error("❌ Gemini API key not found!")
+                else:
+                    with st.spinner("Testing Gemini connectivity..."):
+                        tester = EmbeddingManager(
+                            api_key=api_key,
+                            model_name=EMBEDDING_MODEL_NAME
+                        )
+                        tester.test_connection()
+                    st.success("✅ Gemini embedding connection is working")
+            except Exception as e:
+                st.error(f"❌ Connection test failed: {str(e)}")
+                st.info(
+                    "If this fails on Streamlit Cloud only, check internet egress and GEMINI_API_KEY configuration."
+                )
+
+    with test_col2:
+        st.caption("Run this test before processing to avoid long retries when network access is blocked.")
     
     if st.button("🔄 Process Documents", type="primary", use_container_width=True):
         try:
-            api_key, endpoint = resolve_azure_credentials()
-            if not api_key or not endpoint:
-                st.error("❌ Azure OpenAI credentials not found!")
+            api_key = resolve_gemini_api_key()
+            if not api_key:
+                st.error("❌ Gemini API key not found!")
                 return
+
+            # Preflight Gemini connectivity before document chunking.
+            with st.spinner("🔌 Checking Gemini connection..."):
+                preflight_embedding_manager = EmbeddingManager(
+                    api_key=api_key,
+                    model_name=EMBEDDING_MODEL_NAME
+                )
+                preflight_embedding_manager.test_connection()
+            st.success("✅ Gemini connection verified")
             
             with st.spinner("⏳ Processing documents..."):
                 # Process documents
@@ -167,12 +193,7 @@ def process_documents_tab():
                 
                 # Generate embeddings
                 st.info("🔄 Generating embeddings...")
-                embedding_manager = EmbeddingManager(
-                    api_key=api_key,
-                    endpoint=endpoint,
-                    deployment_name=EMBEDDING_DEPLOYMENT_NAME,
-                    api_version=EMBEDDING_API_VERSION
-                )
+                embedding_manager = preflight_embedding_manager
                 texts = [chunk["content"] for chunk in chunks]
                 embeddings = embedding_manager.embed_batch(texts)
                 
@@ -202,10 +223,10 @@ def process_documents_tab():
         except Exception as e:
             error_message = str(e)
             st.error(f"❌ Error processing documents: {error_message}")
-            if "Could not connect to Azure OpenAI" in error_message or "Connection error" in error_message:
+            if "Could not connect to Gemini API" in error_message or "Connection error" in error_message:
                 st.warning(
-                    "Azure OpenAI could not be reached from this environment. "
-                    "Verify endpoint, deployment names, and Azure network/firewall settings."
+                    "Gemini API could not be reached from this environment. "
+                    "Verify outbound internet and GEMINI_API_KEY."
                 )
             logger.error(f"Document processing error: {error_message}")
 
@@ -316,8 +337,8 @@ def system_info_tab():
     with col1:
         st.subheader("Configuration")
         st.info(f"""
-        - **Chat Model**: {CHAT_DEPLOYMENT_NAME}
-        - **Embedding Model**: {EMBEDDING_DEPLOYMENT_NAME}
+        - **Chat Model**: {CHAT_MODEL_NAME}
+        - **Embedding Model**: {EMBEDDING_MODEL_NAME}
         - **Chunk Size**: {CHUNK_SIZE}
         - **Chunk Overlap**: {CHUNK_OVERLAP}
         - **Top-K Results**: {TOP_K_DOCUMENTS}
@@ -344,7 +365,7 @@ def system_info_tab():
     
     ### Key Features:
     1. **Document Processing**: Chunking and preprocessing of domain documents
-    2. **Embedding Generation**: Using Azure OpenAI embeddings
+    2. **Embedding Generation**: Using Gemini embeddings
     3. **Vector Storage**: FAISS for efficient similarity search
     4. **Smart Retrieval**: Context-aware document retrieval
     5. **Agentic Reasoning**:
@@ -393,7 +414,7 @@ def main():
     st.divider()
     st.markdown("""
     <div style='text-align: center; color: gray; font-size: 0.8em;'>
-    Built with Azure OpenAI • FAISS Vector Store • Agentic RAG Architecture
+    Built with Gemini API • FAISS Vector Store • Agentic RAG Architecture
     </div>
     """, unsafe_allow_html=True)
 

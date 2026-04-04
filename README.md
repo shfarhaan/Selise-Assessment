@@ -37,7 +37,7 @@ A sophisticated mini-RAG system with agentic capabilities for accurate, grounded
 - Metadata preservation for source tracking
 
 ### 2. **Embedding & Vector Storage**
-- Azure OpenAI text-embedding-ada-002 embeddings
+- Gemini text embeddings (`models/text-embedding-004`)
 - FAISS vector database for efficient similarity search
 - Persistent storage and loading of vectors
 
@@ -62,7 +62,7 @@ A sophisticated mini-RAG system with agentic capabilities for accurate, grounded
 
 ### Prerequisites
 - Python 3.8+
-- Azure OpenAI API credentials (API Key and Endpoint)
+- Gemini API key
 
 ### Installation
 
@@ -100,14 +100,13 @@ python setup.py
 
 Create a `.env` file in the project root:
 ```env
-AZURE_OPENAI_API_KEY=your-api-key-here
-AZURE_OPENAI_ENDPOINT=https://your-resource-name.cognitiveservices.azure.com
+GEMINI_API_KEY=your-gemini-api-key-here
 ```
 
 Or configure Streamlit secrets:
 ```bash
 mkdir .streamlit
-# Create .streamlit/secrets.toml with Azure OpenAI credentials
+# Create .streamlit/secrets.toml with GEMINI_API_KEY
 ```
 
 ### Running the System
@@ -295,10 +294,9 @@ Edit `src/config.py` to customize:
 
 ```python
 # Model Configuration
-AZURE_OPENAI_API_KEY = "your-key"              # Azure OpenAI API key
-AZURE_OPENAI_ENDPOINT = "your-endpoint"         # Azure OpenAI endpoint
-CHAT_DEPLOYMENT_NAME = "gpt-4o-mini"            # Chat model deployment
-EMBEDDING_DEPLOYMENT_NAME = "text-embedding-ada-002"  # Embedding deployment
+GEMINI_API_KEY = "your-key"                     # Gemini API key
+CHAT_MODEL_NAME = "gemini-1.5-flash"            # Chat model
+EMBEDDING_MODEL_NAME = "models/text-embedding-004"  # Embedding model
 TEMPERATURE = 0.3                                # Response temperature
 
 # Chunking
@@ -329,8 +327,8 @@ VECTOR_STORE_PATH = "vector_store/faiss_index"
 ### Key Algorithms
 
 **Embedding Generation:**
-- Uses Azure OpenAI's `text-embedding-ada-002` model
-- Dense vector representations of text (1536 dimensions)
+- Uses Gemini `models/text-embedding-004`
+- Dense vector representations of text for semantic retrieval
 
 **Similarity Search:**
 - FAISS L2 distance metric
@@ -386,9 +384,9 @@ With the provided sample documents, try:
   ```
 - These warnings will disappear after installation
 
-### Issue: "Azure OpenAI credentials not found"
-- **Solution**: Set your API key and endpoint in `.env` file or Streamlit secrets
-- Check both `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_ENDPOINT` are properly set
+### Issue: "Gemini API key not found"
+- **Solution**: Set your API key in `.env` file or Streamlit secrets
+- Check `GEMINI_API_KEY` is properly set
 
 ### Issue: "No relevant documents found"
 - **Solution**: Process documents first in the "Process Documents" tab
@@ -452,8 +450,7 @@ The system tracks:
 - [Qdrant Vector Search Engine Documentation](https://qdrant.tech/documentation/)
 
 ### Large Language Models
-- [Azure OpenAI Service Documentation](https://learn.microsoft.com/en-us/azure/ai-services/openai/)
-- [OpenAI API Documentation](https://platform.openai.com/docs/)
+- [Gemini API Documentation](https://ai.google.dev/gemini-api/docs)
 - [LangChain Documentation](https://python.langchain.com/)
 
 ## 🤝 Contributing
@@ -487,6 +484,6 @@ For issues or questions:
 
 ---
 
-**Built with**: Azure OpenAI • FAISS • Streamlit • Python
+**Built with**: Gemini API • FAISS • Streamlit • Python
 
 **Last Updated**: February 2026

@@ -62,21 +62,18 @@ def check_env_file():
         # Check if API key and endpoint are set
         with open(".env", "r") as f:
             content = f.read()
-            has_api_key = "AZURE_OPENAI_API_KEY" in content and "your-" not in content
-            has_endpoint = "AZURE_OPENAI_ENDPOINT" in content and "your-" not in content
+            has_api_key = "GEMINI_API_KEY" in content and "your-" not in content
             
-            if has_api_key and has_endpoint:
-                print("✅ Azure OpenAI credentials appear to be configured")
+            if has_api_key:
+                print("✅ Gemini API key appears to be configured")
                 return True
             else:
                 if not has_api_key:
-                    print("⚠️  AZURE_OPENAI_API_KEY not properly set in .env")
-                if not has_endpoint:
-                    print("⚠️  AZURE_OPENAI_ENDPOINT not properly set in .env")
+                    print("⚠️  GEMINI_API_KEY not properly set in .env")
                 return False
     else:
         print("❌ .env file not found")
-        print("   Create .env file with Azure OpenAI credentials")
+        print("   Create .env file with GEMINI_API_KEY")
         return False
 
 def check_project_structure():
@@ -107,7 +104,7 @@ def verify_imports():
     
     packages = {
         "streamlit": "streamlit",
-        "openai": "openai",
+        "google.genai": "google-genai",
         "faiss": "faiss-cpu",
         "numpy": "numpy",
         "dotenv": "python-dotenv"
@@ -190,8 +187,8 @@ def main():
     else:
         print("⚠️  Almost there!")
         print("\nNext steps:")
-        print("  1. Create .env file with your Azure OpenAI credentials")
-        print("  2. Set AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT")
+        print("  1. Create .env file with your Gemini credentials")
+        print("  2. Set GEMINI_API_KEY")
         print("  3. Run: streamlit run app.py")
     print("="*60)
     

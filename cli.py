@@ -13,10 +13,9 @@ from typing import Optional
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.config import (
-    AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, VECTOR_STORE_PATH, DOCUMENTS_PATH,
+    GEMINI_API_KEY, VECTOR_STORE_PATH, DOCUMENTS_PATH,
     CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_DOCUMENTS,
-    CHAT_DEPLOYMENT_NAME, EMBEDDING_DEPLOYMENT_NAME,
-    CHAT_API_VERSION, EMBEDDING_API_VERSION
+    CHAT_MODEL_NAME, EMBEDDING_MODEL_NAME
 )
 from src.document_processor import DocumentProcessor
 from src.embeddings import EmbeddingManager, FAISSVectorStore
@@ -78,8 +77,8 @@ def process_documents_cli():
     """Process documents from command line"""
     print_section("Document Processing")
     
-    if not AZURE_OPENAI_API_KEY or not AZURE_OPENAI_ENDPOINT:
-        print_error("Azure OpenAI credentials not set. Please configure them in .env file.")
+    if not GEMINI_API_KEY:
+        print_error("Gemini API key not set. Please configure GEMINI_API_KEY in .env file.")
         return False
     
     if not os.path.exists(DOCUMENTS_PATH):
@@ -106,10 +105,8 @@ def process_documents_cli():
         # Generate embeddings
         print_info("Generating embeddings (this may take a minute)...")
         embedding_manager = EmbeddingManager(
-            api_key=AZURE_OPENAI_API_KEY,
-            endpoint=AZURE_OPENAI_ENDPOINT,
-            deployment_name=EMBEDDING_DEPLOYMENT_NAME,
-            api_version=EMBEDDING_API_VERSION
+            api_key=GEMINI_API_KEY,
+            model_name=EMBEDDING_MODEL_NAME
         )
         texts = [chunk["content"] for chunk in chunks]
         embeddings = embedding_manager.embed_batch(texts)
@@ -132,16 +129,14 @@ def process_documents_cli():
 def initialize_rag_agent() -> Optional[AgenticRAG]:
     """Initialize RAG agent"""
     try:
-        if not AZURE_OPENAI_API_KEY or not AZURE_OPENAI_ENDPOINT:
-            print_error("Azure OpenAI credentials not configured")
+        if not GEMINI_API_KEY:
+            print_error("Gemini API key not configured")
             return None
         
         # Initialize embedding manager and vector store
         embedding_manager = EmbeddingManager(
-            api_key=AZURE_OPENAI_API_KEY,
-            endpoint=AZURE_OPENAI_ENDPOINT,
-            deployment_name=EMBEDDING_DEPLOYMENT_NAME,
-            api_version=EMBEDDING_API_VERSION
+            api_key=GEMINI_API_KEY,
+            model_name=EMBEDDING_MODEL_NAME
         )
         vector_store = FAISSVectorStore(vector_store_path=VECTOR_STORE_PATH)
         
@@ -161,11 +156,9 @@ def initialize_rag_agent() -> Optional[AgenticRAG]:
         
         # Initialize agent
         agent = AgenticRAG(
-            api_key=AZURE_OPENAI_API_KEY,
-            endpoint=AZURE_OPENAI_ENDPOINT,
+            api_key=GEMINI_API_KEY,
             retriever=retriever,
-            deployment_name=CHAT_DEPLOYMENT_NAME,
-            api_version=CHAT_API_VERSION
+            model_name=CHAT_MODEL_NAME
         )
         
         return agent
@@ -257,10 +250,9 @@ def show_info():
     
     # Check configuration
     print(f"\n{Colors.BOLD}Configuration:{Colors.ENDC}")
-    print(f"  API Key Set: {'Yes' if AZURE_OPENAI_API_KEY else 'No'}")
-    print(f"  Endpoint Set: {'Yes' if AZURE_OPENAI_ENDPOINT else 'No'}")
-    print(f"  Chat Model: {CHAT_DEPLOYMENT_NAME}")
-    print(f"  Embedding Model: {EMBEDDING_DEPLOYMENT_NAME}")
+    print(f"  API Key Set: {'Yes' if GEMINI_API_KEY else 'No'}")
+    print(f"  Chat Model: {CHAT_MODEL_NAME}")
+    print(f"  Embedding Model: {EMBEDDING_MODEL_NAME}")
     print(f"  Chunk Size: {CHUNK_SIZE}")
     print(f"  Chunk Overlap: {CHUNK_OVERLAP}")
     print(f"  Top-K Results: {TOP_K_DOCUMENTS}")

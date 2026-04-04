@@ -3,13 +3,16 @@ Agentic RAG System with Self-Reflection and Tool Use
 """
 import logging
 import json
-from typing import List, Optional
+import re
+from typing import List
 from enum import Enum
 
 try:
-    from openai import AzureOpenAI
+    from google import genai  # type: ignore[import-not-found]
+    from google.genai import types as genai_types  # type: ignore[import-not-found]
 except ImportError:
-    AzureOpenAI = None
+    genai = None
+    genai_types = None
 
 from src.retriever import RAGRetriever
 
@@ -38,39 +41,63 @@ class AgenticRAG:
     def __init__(
         self,
         api_key: str,
-        endpoint: str,
         retriever: RAGRetriever,
-        deployment_name: str = "gpt-4o-mini",
-        api_version: str = "2025-01-01-preview",
+        model_name: str = "gemini-1.5-flash",
         temperature: float = 0.3,
         max_iterations: int = 3
     ):
         """
-        Initialize Agentic RAG with Azure OpenAI
+        Initialize Agentic RAG with Gemini
         
         Args:
-            api_key: Azure OpenAI API key
-            endpoint: Azure OpenAI endpoint URL
+            api_key: Gemini API key
             retriever: RAG retriever instance
-            deployment_name: Chat deployment name
-            api_version: API version
+            model_name: Chat model name
             temperature: Temperature for generation
             max_iterations: Maximum reflection iterations
         """
-        if not AzureOpenAI:
-            raise ImportError("openai is required. Install it with: pip install openai")
-        
-        self.client = AzureOpenAI(
-            api_key=api_key,
-            api_version=api_version,
-            azure_endpoint=endpoint
-        )
-        self.deployment_name = deployment_name
+        if not genai:
+            raise ImportError("google-genai is required. Install it with: pip install google-genai")
+
+        self.client = genai.Client(api_key=api_key)
+        self.model_name = model_name
         self.retriever = retriever
         self.temperature = temperature
         self.max_iterations = max_iterations
         self.conversation_history = []
         self.state = AgentState.INITIAL
+
+    def _generate(self, system_instruction: str, prompt: str) -> str:
+        response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                temperature=self.temperature,
+            ),
+        )
+        text = getattr(response, "text", "")
+        if not text:
+            text = str(response)
+        return (text or "").strip()
+
+    def _extract_json(self, text: str) -> dict:
+        # Handle possible markdown fenced JSON or extra text.
+        raw = text.strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?\s*", "", raw)
+            raw = re.sub(r"\s*```$", "", raw)
+
+        try:
+            return json.loads(raw)
+        except Exception:
+            match = re.search(r"\{[\s\S]*\}", raw)
+            if match:
+                try:
+                    return json.loads(match.group(0))
+                except Exception:
+                    pass
+            raise ValueError("Model did not return valid JSON")
 
     def _tool_retrieve_documents(self, query: str) -> str:
         """
@@ -120,19 +147,11 @@ class AgenticRAG:
         """
         
         try:
-            response = self.client.chat.completions.create(
-                model=self.deployment_name,
-                messages=[
-                    {"role": "system", "content": "You are an expert document evaluator."},
-                    {"role": "user", "content": evaluation_prompt}
-                ],
-                temperature=self.temperature,
-                response_format={"type": "json_object"}
+            response_text = self._generate(
+                "You are an expert document evaluator.",
+                evaluation_prompt,
             )
-            
-            # Parse JSON response
-            response_text = response.choices[0].message.content.strip()
-            evaluation = json.loads(response_text)
+            evaluation = self._extract_json(response_text)
             return evaluation
         except Exception as e:
             logger.warning(f"Error in critic evaluation: {str(e)}")
@@ -185,16 +204,10 @@ class AgenticRAG:
         """
         
         try:
-            response = self.client.chat.completions.create(
-                model=self.deployment_name,
-                messages=[
-                    {"role": "system", "content": "You are a helpful QA assistant. Answer questions based only on provided context."},
-                    {"role": "user", "content": answer_prompt}
-                ],
-                temperature=self.temperature
+            answer_text = self._generate(
+                "You are a helpful QA assistant. Answer questions based only on provided context.",
+                answer_prompt,
             )
-            
-            answer_text = response.choices[0].message.content
             return {
                 "answer": answer_text,
                 "sources": sources
@@ -276,16 +289,10 @@ class AgenticRAG:
                 """
                 
                 try:
-                    response = self.client.chat.completions.create(
-                        model=self.deployment_name,
-                        messages=[
-                            {"role": "system", "content": "You are a query refinement expert."},
-                            {"role": "user", "content": refinement_prompt}
-                        ],
-                        temperature=self.temperature,
-                        max_tokens=100
+                    current_query = self._generate(
+                        "You are a query refinement expert.",
+                        refinement_prompt,
                     )
-                    current_query = response.choices[0].message.content.strip()
                     logger.info(f"Refined query: {current_query}")
                     continue
                 except:

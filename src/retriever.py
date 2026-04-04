@@ -45,7 +45,7 @@ class RAGRetriever:
         """
         try:
             # Generate query embedding
-            query_embedding = self.embedding_manager.embed_text(query)
+            query_embedding = self.embedding_manager.embed_query(query)
             
             # Search vector store
             results = self.vector_store.search(query_embedding, top_k=self.top_k)

@@ -14,60 +14,79 @@ except ImportError:
     faiss = None
 
 try:
-    from openai import AzureOpenAI
+    from google import genai  # type: ignore[import-not-found]
+    from google.genai import types as genai_types  # type: ignore[import-not-found]
 except ImportError:
-    AzureOpenAI = None
+    genai = None
+    genai_types = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 class EmbeddingManager:
-    """Manage embeddings using Azure OpenAI API"""
+    """Manage embeddings using Gemini API."""
 
     def __init__(
-        self, 
-        api_key: str, 
-        endpoint: str,
-        deployment_name: str = "text-embedding-ada-002",
-        api_version: str = "2023-05-15"
+        self,
+        api_key: str,
+        model_name: str = "models/text-embedding-004"
     ):
         """
-        Initialize embedding manager for Azure OpenAI
+        Initialize embedding manager for Gemini
         
         Args:
-            api_key: Azure OpenAI API key
-            endpoint: Azure OpenAI endpoint URL
-            deployment_name: Embedding deployment name
-            api_version: API version
+            api_key: Gemini API key
+            model_name: Embedding model name
         """
-        if not AzureOpenAI:
-            raise ImportError("openai is required. Install it with: pip install openai")
-        
-        self.client = AzureOpenAI(
-            api_key=api_key,
-            api_version=api_version,
-            azure_endpoint=endpoint,
-            timeout=30.0,
-            max_retries=2
-        )
-        self.deployment_name = deployment_name
-        self.endpoint = endpoint
+        if not genai:
+            raise ImportError("google-genai is required. Install it with: pip install google-genai")
+
+        self.client = genai.Client(api_key=api_key)
+        self.model_name = model_name
 
     def _raise_embedding_error_with_hint(self, err: Exception) -> None:
         """Raise a clearer error for common connectivity failures."""
         message = str(err)
         if "Connection error" in message:
             raise RuntimeError(
-                "Could not connect to Azure OpenAI for embeddings. "
-                "Check that the endpoint is publicly reachable from Streamlit Cloud, "
-                "the Azure OpenAI resource allows public network access, and no IP/network rule blocks outbound traffic. "
-                f"Endpoint used: {self.endpoint}"
+                "Could not connect to Gemini API for embeddings. "
+                "Check that outbound internet access is available in the runtime environment "
+                "and that GEMINI_API_KEY is valid."
             ) from err
 
         raise err
 
-    def embed_text(self, text: str) -> List[float]:
+    def test_connection(self) -> None:
+        """Run a minimal embedding request to validate endpoint and deployment connectivity."""
+        try:
+            self.embed_text("ping", task_type="retrieval_document")
+        except Exception as e:
+            logger.error(f"Embedding connection test failed: {str(e)}")
+            self._raise_embedding_error_with_hint(e)
+
+    def _embed(self, text: str, task_type: str) -> List[float]:
+        response = self.client.models.embed_content(
+            model=self.model_name,
+            contents=[text],
+            config=genai_types.EmbedContentConfig(task_type=task_type.upper()),
+        )
+        embeddings = getattr(response, "embeddings", None) or []
+        if not embeddings:
+            return []
+
+        first = embeddings[0]
+        values = getattr(first, "values", None)
+        if values is None and isinstance(first, dict):
+            values = first.get("values", [])
+        if values is None:
+            return []
+
+        if not isinstance(values, list):
+            values = list(values)
+        return values
+
+    def embed_text(self, text: str, task_type: str = "retrieval_document") -> List[float]:
         """
         Generate embedding for text
         
@@ -78,14 +97,14 @@ class EmbeddingManager:
             Embedding vector
         """
         try:
-            response = self.client.embeddings.create(
-                input=text,
-                model=self.deployment_name
-            )
-            return response.data[0].embedding
+            return self._embed(text, task_type=task_type)
         except Exception as e:
             logger.error(f"Error embedding text: {str(e)}")
             self._raise_embedding_error_with_hint(e)
+
+    def embed_query(self, query: str) -> List[float]:
+        """Generate embedding optimized for retrieval queries."""
+        return self.embed_text(query, task_type="retrieval_query")
 
     def embed_batch(self, texts: List[str], batch_size: int = 100) -> List[List[float]]:
         """
@@ -107,19 +126,9 @@ class EmbeddingManager:
             logger.info(f"Embedding batch {batch_num} of {total_batches}")
             
             try:
-                # Azure OpenAI supports batch embedding
-                response = self.client.embeddings.create(
-                    input=batch,
-                    model=self.deployment_name
-                )
-                
-                # Extract embeddings from response
                 batch_embeddings = []
-                for item in response.data:
-                    embedding = item.embedding
-                    if not isinstance(embedding, list):
-                        embedding = list(embedding)
-                    batch_embeddings.append(embedding)
+                for text in batch:
+                    batch_embeddings.append(self._embed(text, task_type="retrieval_document"))
                 
                 embeddings.extend(batch_embeddings)
                 logger.info(f"Batch {batch_num}: Generated {len(batch_embeddings)} embeddings")

@@ -14,10 +14,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from src.config import (
-    AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, VECTOR_STORE_PATH, DOCUMENTS_PATH,
+    GEMINI_API_KEY, VECTOR_STORE_PATH, DOCUMENTS_PATH,
     CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_DOCUMENTS,
-    CHAT_DEPLOYMENT_NAME, EMBEDDING_DEPLOYMENT_NAME,
-    CHAT_API_VERSION, EMBEDDING_API_VERSION
+    CHAT_MODEL_NAME, EMBEDDING_MODEL_NAME
 )
 from src.document_processor import DocumentProcessor
 from src.embeddings import EmbeddingManager, FAISSVectorStore
@@ -94,15 +93,13 @@ def initialize_agent() -> AgenticRAG:
     
     try:
         # Check credentials
-        if not AZURE_OPENAI_API_KEY or not AZURE_OPENAI_ENDPOINT:
-            raise ValueError("Azure OpenAI credentials not set")
+        if not GEMINI_API_KEY:
+            raise ValueError("Gemini API key not set")
         
         # Initialize embedding manager
         embedding_manager = EmbeddingManager(
-            api_key=AZURE_OPENAI_API_KEY,
-            endpoint=AZURE_OPENAI_ENDPOINT,
-            deployment_name=EMBEDDING_DEPLOYMENT_NAME,
-            api_version=EMBEDDING_API_VERSION
+            api_key=GEMINI_API_KEY,
+            model_name=EMBEDDING_MODEL_NAME
         )
         
         # Load vector store
@@ -119,11 +116,9 @@ def initialize_agent() -> AgenticRAG:
         
         # Initialize agent
         agent = AgenticRAG(
-            api_key=AZURE_OPENAI_API_KEY,
-            endpoint=AZURE_OPENAI_ENDPOINT,
+            api_key=GEMINI_API_KEY,
             retriever=retriever,
-            deployment_name=CHAT_DEPLOYMENT_NAME,
-            api_version=CHAT_API_VERSION
+            model_name=CHAT_MODEL_NAME
         )
         
         rag_agent = agent
@@ -182,8 +177,8 @@ async def get_info():
         
         return InfoResponse(
             status="ready" if vector_store_exists else "not_initialized",
-            chat_model=CHAT_DEPLOYMENT_NAME,
-            embedding_model=EMBEDDING_DEPLOYMENT_NAME,
+            chat_model=CHAT_MODEL_NAME,
+            embedding_model=EMBEDDING_MODEL_NAME,
             vector_store_ready=vector_store_exists,
             documents_count=doc_count,
             chunk_size=CHUNK_SIZE,
@@ -234,8 +229,8 @@ async def process_documents(request: ProcessRequest):
         global rag_agent
         
         # Check credentials
-        if not AZURE_OPENAI_API_KEY or not AZURE_OPENAI_ENDPOINT:
-            raise HTTPException(status_code=500, detail="Azure OpenAI credentials not set")
+        if not GEMINI_API_KEY:
+            raise HTTPException(status_code=500, detail="Gemini API key not set")
         
         # Check documents directory
         if not os.path.exists(DOCUMENTS_PATH):
@@ -266,10 +261,8 @@ async def process_documents(request: ProcessRequest):
         
         # Generate embeddings
         embedding_manager = EmbeddingManager(
-            api_key=AZURE_OPENAI_API_KEY,
-            endpoint=AZURE_OPENAI_ENDPOINT,
-            deployment_name=EMBEDDING_DEPLOYMENT_NAME,
-            api_version=EMBEDDING_API_VERSION
+            api_key=GEMINI_API_KEY,
+            model_name=EMBEDDING_MODEL_NAME
         )
         
         texts = [chunk["content"] for chunk in chunks]
