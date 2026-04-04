@@ -23,6 +23,24 @@ from src.agent import AgenticRAG
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def resolve_azure_credentials() -> tuple[str, str]:
+    """Resolve Azure credentials from env first, then Streamlit secrets."""
+    api_key = AZURE_OPENAI_API_KEY or ""
+    endpoint = AZURE_OPENAI_ENDPOINT or ""
+
+    if api_key and endpoint:
+        return api_key, endpoint
+
+    try:
+        api_key = api_key or st.secrets.get("AZURE_OPENAI_API_KEY", "")
+        endpoint = endpoint or st.secrets.get("AZURE_OPENAI_ENDPOINT", "")
+    except Exception:
+        # st.secrets can raise when no secrets file is configured.
+        pass
+
+    return api_key, endpoint
+
 # Page configuration
 st.set_page_config(
     page_title=STREAMLIT_PAGE_TITLE,
@@ -49,10 +67,9 @@ def initialize_rag_system():
     """Initialize RAG components (cached)"""
     try:
         # Check API key
-        api_key = AZURE_OPENAI_API_KEY or st.secrets.get("AZURE_OPENAI_API_KEY", "")
-        endpoint = AZURE_OPENAI_ENDPOINT or st.secrets.get("AZURE_OPENAI_ENDPOINT", "")
+        api_key, endpoint = resolve_azure_credentials()
         if not api_key or not endpoint:
-            st.error("❌ Azure OpenAI credentials not found. Please set AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT in .env.")
+            st.error("❌ Azure OpenAI credentials not found. Please set AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT.")
             st.stop()
         
         # Initialize components
@@ -132,8 +149,7 @@ def process_documents_tab():
     
     if st.button("🔄 Process Documents", type="primary", use_container_width=True):
         try:
-            api_key = AZURE_OPENAI_API_KEY or st.secrets.get("AZURE_OPENAI_API_KEY", "")
-            endpoint = AZURE_OPENAI_ENDPOINT or st.secrets.get("AZURE_OPENAI_ENDPOINT", "")
+            api_key, endpoint = resolve_azure_credentials()
             if not api_key or not endpoint:
                 st.error("❌ Azure OpenAI credentials not found!")
                 return
@@ -322,7 +338,7 @@ def system_info_tab():
     
     ### Key Features:
     1. **Document Processing**: Chunking and preprocessing of domain documents
-    2. **Embedding Generation**: Using Google's Generative AI embeddings
+    2. **Embedding Generation**: Using Azure OpenAI embeddings
     3. **Vector Storage**: FAISS for efficient similarity search
     4. **Smart Retrieval**: Context-aware document retrieval
     5. **Agentic Reasoning**:
@@ -371,7 +387,7 @@ def main():
     st.divider()
     st.markdown("""
     <div style='text-align: center; color: gray; font-size: 0.8em;'>
-    Built with Google Gemini API • FAISS Vector Store • Agentic RAG Architecture
+    Built with Azure OpenAI • FAISS Vector Store • Agentic RAG Architecture
     </div>
     """, unsafe_allow_html=True)
 

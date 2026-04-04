@@ -26,6 +26,13 @@ class DocumentProcessor:
             chunk_size: Size of each chunk
             chunk_overlap: Overlap between chunks
         """
+        if chunk_size < 1:
+            raise ValueError("chunk_size must be >= 1")
+        if chunk_overlap < 0:
+            raise ValueError("chunk_overlap must be >= 0")
+        if chunk_overlap >= chunk_size:
+            raise ValueError("chunk_overlap must be smaller than chunk_size")
+
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
@@ -93,6 +100,7 @@ class DocumentProcessor:
         start = 0
         
         while start < len(text):
+            prev_start = start
             # Find end position
             end = start + self.chunk_size
             
@@ -104,12 +112,18 @@ class DocumentProcessor:
                 last_break = max(last_period, last_newline)
                 
                 if last_break > start:
-                    end = last_break + 1
+                    # Only break at boundaries that still allow forward movement
+                    # after overlap subtraction.
+                    candidate_end = last_break + 1
+                    if candidate_end - start > self.chunk_overlap:
+                        end = candidate_end
             
             chunks.append(text[start:end].strip())
             
-            # Move start position with overlap
+            # Move start position with overlap and guarantee progress.
             start = end - self.chunk_overlap
+            if start <= prev_start:
+                start = prev_start + 1
         
         return [chunk for chunk in chunks if chunk]  # Remove empty chunks
 

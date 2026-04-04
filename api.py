@@ -168,8 +168,11 @@ async def get_info():
     """Get system information"""
     try:
         # Check vector store
-        vector_store_exists = (os.path.exists(VECTOR_STORE_PATH) and
-                              os.path.exists(os.path.join(VECTOR_STORE_PATH, "index.faiss")))
+        vector_store_exists = (
+            os.path.exists(VECTOR_STORE_PATH)
+            and os.path.exists(os.path.join(VECTOR_STORE_PATH, "faiss.index"))
+            and os.path.exists(os.path.join(VECTOR_STORE_PATH, "metadata.pkl"))
+        )
         
         # Count documents
         doc_count = 0
@@ -238,6 +241,16 @@ async def process_documents(request: ProcessRequest):
         if not os.path.exists(DOCUMENTS_PATH):
             raise HTTPException(status_code=404, detail=f"Documents directory not found: {DOCUMENTS_PATH}")
         
+        # Validate chunking configuration to prevent infinite loops / invalid slicing
+        if request.chunk_size is None or request.chunk_overlap is None:
+            raise HTTPException(status_code=400, detail="chunk_size and chunk_overlap are required")
+        if request.chunk_size < 1:
+            raise HTTPException(status_code=400, detail="chunk_size must be >= 1")
+        if request.chunk_overlap < 0:
+            raise HTTPException(status_code=400, detail="chunk_overlap must be >= 0")
+        if request.chunk_overlap >= request.chunk_size:
+            raise HTTPException(status_code=400, detail="chunk_overlap must be smaller than chunk_size")
+
         # Process documents
         processor = DocumentProcessor(
             chunk_size=request.chunk_size,
