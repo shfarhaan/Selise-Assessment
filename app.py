@@ -200,8 +200,14 @@ def process_documents_tab():
                 st.balloons()
         
         except Exception as e:
-            st.error(f"❌ Error processing documents: {str(e)}")
-            logger.error(f"Document processing error: {str(e)}")
+            error_message = str(e)
+            st.error(f"❌ Error processing documents: {error_message}")
+            if "Could not connect to Azure OpenAI" in error_message or "Connection error" in error_message:
+                st.warning(
+                    "Azure OpenAI could not be reached from this environment. "
+                    "Verify endpoint, deployment names, and Azure network/firewall settings."
+                )
+            logger.error(f"Document processing error: {error_message}")
 
 
 def qa_chat_tab(agent):

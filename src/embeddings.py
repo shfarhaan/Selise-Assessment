@@ -47,9 +47,25 @@ class EmbeddingManager:
         self.client = AzureOpenAI(
             api_key=api_key,
             api_version=api_version,
-            azure_endpoint=endpoint
+            azure_endpoint=endpoint,
+            timeout=30.0,
+            max_retries=2
         )
         self.deployment_name = deployment_name
+        self.endpoint = endpoint
+
+    def _raise_embedding_error_with_hint(self, err: Exception) -> None:
+        """Raise a clearer error for common connectivity failures."""
+        message = str(err)
+        if "Connection error" in message:
+            raise RuntimeError(
+                "Could not connect to Azure OpenAI for embeddings. "
+                "Check that the endpoint is publicly reachable from Streamlit Cloud, "
+                "the Azure OpenAI resource allows public network access, and no IP/network rule blocks outbound traffic. "
+                f"Endpoint used: {self.endpoint}"
+            ) from err
+
+        raise err
 
     def embed_text(self, text: str) -> List[float]:
         """
@@ -69,7 +85,7 @@ class EmbeddingManager:
             return response.data[0].embedding
         except Exception as e:
             logger.error(f"Error embedding text: {str(e)}")
-            raise
+            self._raise_embedding_error_with_hint(e)
 
     def embed_batch(self, texts: List[str], batch_size: int = 100) -> List[List[float]]:
         """
@@ -117,7 +133,7 @@ class EmbeddingManager:
                         embeddings.append(embedding)
                     except Exception as text_error:
                         logger.error(f"Error embedding text: {str(text_error)}")
-                        raise
+                        self._raise_embedding_error_with_hint(text_error)
         
         logger.info(f"Total embeddings generated: {len(embeddings)}")
         if embeddings:
